@@ -1,13 +1,39 @@
-export const TABS = [
-  "Dashboard",
-  "Projects",
-  "Find Subs",
-  "Permits",
-  "Subs",
-  "Schedule",
-  "Budget",
-  "Safety",
-  "Contracts",
+export const WORKFLOW_STAGES = [
+  {
+    id: 1, key: "project", icon: "🏗", short: "Project",
+    title: "Define Your Project",
+    why: "Know what you're building and what it should cost before spending a dime. The AI analysis gives you a realistic cost range, materials list, and regional code requirements.",
+  },
+  {
+    id: 2, key: "budget", icon: "💰", short: "Budget",
+    title: "Plan Your Budget",
+    why: "Set spending limits for each trade category using the AI estimate as your baseline. Having a written budget is your #1 tool for staying in control.",
+  },
+  {
+    id: 3, key: "hire", icon: "👷", short: "Hire",
+    title: "Hire Contractors",
+    why: "Find qualified contractors, verify their credentials, and review every quote with AI before signing anything. Most owner-builder mistakes happen at this stage.",
+  },
+  {
+    id: 4, key: "permits", icon: "📋", short: "Permits",
+    title: "Secure Permits",
+    why: "No work should start without permits. Unpermitted work can void your homeowner's insurance, fail at resale inspection, and require expensive tear-outs.",
+  },
+  {
+    id: 5, key: "schedule", icon: "📅", short: "Schedule",
+    title: "Schedule the Work",
+    why: "Plan each phase in advance. Contractors who know the schedule show up on time — vague commitments lead to delays and cost overruns.",
+  },
+  {
+    id: 6, key: "track", icon: "📊", short: "Track & Pay",
+    title: "Track Progress & Pay",
+    why: "Log actual costs as work is completed. Never release full payment without a lien waiver. Holding back a small retainage is your leverage to get punch-list items done.",
+  },
+  {
+    id: 7, key: "closeout", icon: "✅", short: "Closeout",
+    title: "Safety & Closeout",
+    why: "Verify safety compliance and confirm each phase before final sign-off. A written punch list with the final payment on hold is the only way to ensure everything gets finished.",
+  },
 ];
 
 export const PHASES = [

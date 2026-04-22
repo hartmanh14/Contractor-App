@@ -82,7 +82,7 @@ function VettingGuide({ sub, onClose }) {
 }
 
 export default function Subs() {
-  const { subs, setSubs, setTab } = useApp();
+  const { subs, setSubs, goToHire } = useApp();
   const [form, setForm] = useState(null);
   const [vettingTarget, setVettingTarget] = useState(null);
 
@@ -116,7 +116,7 @@ export default function Subs() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div style={{ fontSize: 12, color: "#64748b" }}>{subs.length} subcontractors</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setTab("Find Subs")} style={{ ...btnSm, color: "#3b82f6" }}>🔍 Find Subs</button>
+          <button onClick={() => goToHire("find")} style={{ ...btnSm, color: "#3b82f6" }}>🔍 Find Subs</button>
           <button onClick={() => setForm(newSubTemplate)} style={btnPrimary}>+ Add Manually</button>
         </div>
       </div>

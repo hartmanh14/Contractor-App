@@ -7,7 +7,8 @@ import {
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const [tab, setTab] = useState("Dashboard");
+  const [stage, setStage] = useState(1);
+  const [hireSubStep, setHireSubStep] = useState("find");
   const [activeProject, setActiveProject] = useState(1);
   const [projects, setProjects] = useState(initialProjects);
   const [subs, setSubs] = useState(initialSubs);
@@ -16,7 +17,6 @@ export function AppProvider({ children }) {
   const [budget, setBudget] = useState(initialBudget);
   const [safety, setSafety] = useState(initialSafetyItems);
 
-  // Derived values scoped to the active project
   const proj = projects.find(p => p.id === activeProject);
   const projBudget = budget.filter(b => b.projectId === activeProject);
   const projTasks = tasks.filter(t => t.projectId === activeProject);
@@ -29,15 +29,18 @@ export function AppProvider({ children }) {
     ? Math.round((safety.filter(s => s.done).length / safety.length) * 100)
     : 0;
 
+  function goToHire(subStep = "find") {
+    setStage(3);
+    setHireSubStep(subStep);
+  }
+
   return (
     <AppContext.Provider value={{
-      // Navigation
-      tab, setTab,
-      // Active project
+      stage, setStage,
+      hireSubStep, setHireSubStep, goToHire,
       activeProject, setActiveProject,
       proj, projBudget, projTasks, projPermits,
       totalBudgeted, totalActual, totalPaid, safetyPct,
-      // Collections
       projects, setProjects,
       subs, setSubs,
       permits, setPermits,
