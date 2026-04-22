@@ -1,12 +1,14 @@
 import { createContext, useContext, useState } from "react";
 import {
   initialProjects, initialSubs, initialPermits,
-  initialTasks, initialBudget, initialSafetyItems,
+  initialTasks, initialBudget, initialSafetyItems, initialDIYProjects,
 } from "./initialData";
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
+  const [appMode, setAppMode] = useState("contractor"); // "contractor" | "diy"
+  const [diyProjects, setDIYProjects] = useState(initialDIYProjects);
   const [stage, setStage] = useState(1);
   const [hireSubStep, setHireSubStep] = useState("find");
   const [activeProject, setActiveProject] = useState(1);
@@ -36,6 +38,8 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
+      appMode, setAppMode,
+      diyProjects, setDIYProjects,
       stage, setStage,
       hireSubStep, setHireSubStep, goToHire,
       activeProject, setActiveProject,

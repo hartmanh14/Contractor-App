@@ -1,6 +1,7 @@
 import { useApp } from "@/store/AppContext";
 import Header from "@/components/layout/Header";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
+import DIY from "@/features/diy/DIY";
 import { WORKFLOW_STAGES } from "@/lib/constants";
 import { btnPrimary, btnSm, card } from "@/styles/theme";
 import { fmt } from "@/lib/utils";
@@ -155,7 +156,7 @@ function Stage7() {
 const STAGE_COMPONENTS = [null, Stage1, Stage2, Stage3, Stage4, Stage5, Stage6, Stage7];
 
 export default function App() {
-  const { stage, setStage } = useApp();
+  const { appMode, stage, setStage } = useApp();
   const stageData = WORKFLOW_STAGES.find(s => s.id === stage);
   const StageComp = STAGE_COMPONENTS[stage] || Stage1;
   const isFirst = stage === 1;
@@ -166,39 +167,46 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "#020617", color: "#e2e8f0" }}>
       <Header />
-      <WorkflowStepper />
 
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "28px 20px 60px" }}>
-        {/* Stage header */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: "#3b82f6", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>
-            Step {stage} of {WORKFLOW_STAGES.length}
+      {appMode === "diy" ? (
+        <DIY />
+      ) : (
+        <>
+          <WorkflowStepper />
+
+          <div style={{ maxWidth: 960, margin: "0 auto", padding: "28px 20px 60px" }}>
+            {/* Stage header */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: "#3b82f6", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>
+                Step {stage} of {WORKFLOW_STAGES.length}
+              </div>
+              <h1 style={{ fontSize: 26, fontWeight: 900, color: "#f8fafc", margin: 0 }}>
+                {stageData.icon} {stageData.title}
+              </h1>
+            </div>
+
+            <StageIntro stage={stageData} />
+            <StageComp />
+
+            {/* Back / Next navigation */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 36, paddingTop: 20, borderTop: "1px solid #1e293b" }}>
+              {!isFirst ? (
+                <button onClick={() => setStage(stage - 1)} style={{ ...btnSm, color: "#94a3b8", display: "flex", alignItems: "center", gap: 6 }}>
+                  ← {prev.short}
+                </button>
+              ) : <div />}
+
+              {!isLast ? (
+                <button onClick={() => setStage(stage + 1)} style={{ ...btnPrimary, display: "flex", alignItems: "center", gap: 6 }}>
+                  Next: {next.title} →
+                </button>
+              ) : (
+                <div style={{ fontSize: 13, color: "#22c55e", fontWeight: 700 }}>✓ You've completed the full workflow</div>
+              )}
+            </div>
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#f8fafc", margin: 0 }}>
-            {stageData.icon} {stageData.title}
-          </h1>
-        </div>
-
-        <StageIntro stage={stageData} />
-        <StageComp />
-
-        {/* Back / Next navigation */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 36, paddingTop: 20, borderTop: "1px solid #1e293b" }}>
-          {!isFirst ? (
-            <button onClick={() => setStage(stage - 1)} style={{ ...btnSm, color: "#94a3b8", display: "flex", alignItems: "center", gap: 6 }}>
-              ← {prev.short}
-            </button>
-          ) : <div />}
-
-          {!isLast ? (
-            <button onClick={() => setStage(stage + 1)} style={{ ...btnPrimary, display: "flex", alignItems: "center", gap: 6 }}>
-              Next: {next.title} →
-            </button>
-          ) : (
-            <div style={{ fontSize: 13, color: "#22c55e", fontWeight: 700 }}>✓ You've completed the full workflow</div>
-          )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
