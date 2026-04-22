@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useApp } from "@/store/AppContext";
 import { btnPrimary, btnSm, input, lbl } from "@/styles/theme";
 import { fmt } from "@/lib/utils";
+import { analyzeDIYProject } from "@/lib/api/analyze";
 
 const STEPS = ["Details", "Photos", "Review", "AI Plan"];
 const ROOMS = ["Living Room", "Kitchen", "Bathroom", "Bedroom", "Home Office", "Garage", "Outdoor/Yard", "Basement", "Other"];
@@ -109,58 +110,33 @@ function detectType(name, description) {
   return null;
 }
 
-async function runDIYAnalysis(form) {
-  // Encode photos to base64 for server
-  const photos = await Promise.all(
-    form.photos.map(async photo => {
-      if (!photo.file) return null;
-      const base64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(photo.file);
-      });
-      return { base64, mimeType: photo.file.type, caption: photo.caption };
-    })
-  );
-
-  try {
-    const res = await fetch("/api/analyze-diy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, photos: photos.filter(Boolean) }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || "Server error");
-    return data.analysis;
-  } catch {
-    await new Promise(r => setTimeout(r, 1800));
-    const type = detectType(form.name, form.description);
-    if (type && MOCK_ANALYSES[type]) return MOCK_ANALYSES[type];
-    // Generic fallback
-    return {
-      difficulty: "beginner", difficultyReason: "With careful preparation, this is manageable for most homeowners.",
-      totalTimeHours: 4, timeBreakdown: "3 hrs active work + 1 hr drying/curing",
-      estimatedTotalCost: form.budget ? Math.round(form.budget * 0.7) : 120,
-      materials: [
-        { item: "Primary materials for the project", qty: "1", unit: "set", cost: form.budget ? Math.round(form.budget * 0.5) : 80, store: "Home improvement store" },
-        { item: "Prep supplies (tape, cloths, sandpaper)", qty: "1", unit: "set", cost: 20, store: "Painting/hardware" },
-        { item: "Fasteners and adhesives", qty: "1", unit: "set", cost: 15, store: "Hardware" },
-      ],
-      tools: [
-        { item: "Basic hand tools (screwdrivers, hammer)", action: "have", cost: 0 },
-        { item: "Project-specific tool", action: "buy", cost: 25 },
-      ],
-      steps: [
-        { number: 1, title: "Gather materials and prep the workspace", timeMinutes: 30, description: "Collect all materials and tools. Clear and protect the work area. Read all product instructions before starting.", tips: "Lay out all tools and materials before starting — interruptions to find missing items cause mistakes.", warning: null },
-        { number: 2, title: "Execute the main work", timeMinutes: 90, description: "Follow the project steps carefully, taking time to measure and verify before each action. Work methodically from start to finish.", tips: "Measure twice, cut or drill once. The extra 30 seconds saves an hour of correction.", warning: null },
-        { number: 3, title: "Inspect and finish", timeMinutes: 30, description: "Check your work carefully. Address any imperfections while materials are still workable. Allow any curing or drying time required.", tips: "Don't rush drying time — most project failures come from moving too fast.", warning: null },
-      ],
-      tips: ["Read all product instructions before starting", "Gather all materials before beginning — mid-project trips to the store lead to errors", "Take photos as you go for reference"],
-      safetyNotes: ["Wear appropriate PPE for the task (safety glasses, gloves)", "Ventilate the workspace when using adhesives, paints, or solvents"],
-      imagePrompt: `Photorealistic interior home improvement result showing a beautifully completed ${form.name} project, professional finish, bright and clean home setting`,
-      imageUrl: null,
-    };
-  }
+async function mockDIYFallback(form) {
+  await new Promise(r => setTimeout(r, 900));
+  const type = detectType(form.name, form.description);
+  if (type && MOCK_ANALYSES[type]) return MOCK_ANALYSES[type];
+  return {
+    difficulty: "beginner", difficultyReason: "With careful preparation, this is manageable for most homeowners.",
+    totalTimeHours: 4, timeBreakdown: "3 hrs active work + 1 hr drying/curing",
+    estimatedTotalCost: form.budget ? Math.round(form.budget * 0.7) : 120,
+    materials: [
+      { item: "Primary materials for the project", qty: "1", unit: "set", cost: form.budget ? Math.round(form.budget * 0.5) : 80, store: "Home improvement store" },
+      { item: "Prep supplies (tape, cloths, sandpaper)", qty: "1", unit: "set", cost: 20, store: "Painting/hardware" },
+      { item: "Fasteners and adhesives", qty: "1", unit: "set", cost: 15, store: "Hardware" },
+    ],
+    tools: [
+      { item: "Basic hand tools (screwdrivers, hammer)", action: "have", cost: 0 },
+      { item: "Project-specific tool", action: "buy", cost: 25 },
+    ],
+    steps: [
+      { number: 1, title: "Gather materials and prep the workspace", timeMinutes: 30, description: "Collect all materials and tools. Clear and protect the work area. Read all product instructions before starting.", tips: "Lay out all tools and materials before starting — interruptions to find missing items cause mistakes.", warning: null },
+      { number: 2, title: "Execute the main work", timeMinutes: 90, description: "Follow the project steps carefully, taking time to measure and verify before each action. Work methodically from start to finish.", tips: "Measure twice, cut or drill once. The extra 30 seconds saves an hour of correction.", warning: null },
+      { number: 3, title: "Inspect and finish", timeMinutes: 30, description: "Check your work carefully. Address any imperfections while materials are still workable. Allow any curing or drying time required.", tips: "Don't rush drying time — most project failures come from moving too fast.", warning: null },
+    ],
+    tips: ["Read all product instructions before starting", "Gather all materials before beginning — mid-project trips to the store lead to errors", "Take photos as you go for reference"],
+    safetyNotes: ["Wear appropriate PPE for the task (safety glasses, gloves)", "Ventilate the workspace when using adhesives, paints, or solvents"],
+    imagePrompt: `Photorealistic interior home improvement result showing a beautifully completed ${form.name} project, professional finish, bright and clean home setting`,
+    imageUrl: null,
+  };
 }
 
 export default function NewDIYWizard({ onClose }) {
@@ -171,6 +147,7 @@ export default function NewDIYWizard({ onClose }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [analyzeError, setAnalyzeError] = useState(null);
+  const [analysisSource, setAnalysisSource] = useState(null);
   const fileRef = useRef();
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
@@ -192,9 +169,13 @@ export default function NewDIYWizard({ onClose }) {
     setAnalyzing(true);
     setAnalyzeError(null);
     setAnalysis(null);
+    setAnalysisSource(null);
     try {
-      const result = await runDIYAnalysis(form);
+      const { analysis: result, source } = await analyzeDIYProject(form, {
+        mockFallback: mockDIYFallback,
+      });
       setAnalysis(result);
+      setAnalysisSource(source);
     } catch (err) {
       setAnalyzeError(err.message);
     } finally {
@@ -342,6 +323,16 @@ export default function NewDIYWizard({ onClose }) {
 
             {analysis && !analyzing && (
               <div>
+                {analysisSource === "mock" ? (
+                  <div style={{ padding: "10px 14px", background: "#f59e0b11", border: "1px solid #f59e0b33", borderRadius: 8, fontSize: 12, color: "#fbbf24", marginBottom: 14 }}>
+                    ⚠️ Preview mode — showing sample data. Add an <code>ANTHROPIC_API_KEY</code> on the backend for a real AI-generated plan.
+                  </div>
+                ) : analysisSource === "api" && (
+                  <div style={{ padding: "10px 14px", background: "#22c55e11", border: "1px solid #22c55e33", borderRadius: 8, fontSize: 12, color: "#86efac", marginBottom: 14 }}>
+                    ✓ Live AI plan generated
+                  </div>
+                )}
+
                 {/* Summary header */}
                 <div style={{ background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 12, padding: "16px 18px", marginBottom: 18 }}>
                   <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>

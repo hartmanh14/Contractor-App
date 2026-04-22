@@ -1,75 +1,108 @@
-import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { extractStructured, photosToContent } from "../lib/anthropic.mjs";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-const OUTPUT_SCHEMA = `Return ONLY a valid JSON object — no markdown, no commentary:
-{
-  "regionalCodes": [
-    { "code": "string", "title": "string", "description": "string", "category": "string" }
-  ],
-  "materials": [
-    { "item": "string", "quantity": "string", "unit": "string", "estimatedCost": number, "category": "string" }
-  ],
-  "costEstimate": {
-    "breakdown": [
-      { "category": "string", "low": number, "high": number }
-    ],
-    "totalLow": number,
-    "totalHigh": number,
-    "notes": "string"
+const ANALYSIS_SCHEMA = {
+  type: "object",
+  required: ["regionalCodes", "materials", "costEstimate", "designOptions"],
+  properties: {
+    regionalCodes: {
+      type: "array",
+      minItems: 4,
+      maxItems: 6,
+      items: {
+        type: "object",
+        required: ["code", "title", "description", "category"],
+        properties: {
+          code: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          category: { type: "string" },
+        },
+      },
+    },
+    materials: {
+      type: "array",
+      minItems: 8,
+      items: {
+        type: "object",
+        required: ["item", "quantity", "unit", "estimatedCost", "category"],
+        properties: {
+          item: { type: "string" },
+          quantity: { type: "string" },
+          unit: { type: "string" },
+          estimatedCost: { type: "number" },
+          category: { type: "string" },
+        },
+      },
+    },
+    costEstimate: {
+      type: "object",
+      required: ["breakdown", "totalLow", "totalHigh", "notes"],
+      properties: {
+        breakdown: {
+          type: "array",
+          minItems: 4,
+          items: {
+            type: "object",
+            required: ["category", "low", "high"],
+            properties: {
+              category: { type: "string" },
+              low: { type: "number" },
+              high: { type: "number" },
+            },
+          },
+        },
+        totalLow: { type: "number" },
+        totalHigh: { type: "number" },
+        notes: { type: "string" },
+      },
+    },
+    designOptions: {
+      type: "array",
+      minItems: 3,
+      maxItems: 3,
+      items: {
+        type: "object",
+        required: ["title", "style", "description", "highlights", "estimatedCostAdder", "imagePrompt"],
+        properties: {
+          title: { type: "string" },
+          style: { type: "string" },
+          description: { type: "string" },
+          highlights: { type: "array", minItems: 3, items: { type: "string" } },
+          estimatedCostAdder: { type: "number" },
+          imagePrompt: { type: "string" },
+        },
+      },
+    },
   },
-  "designOptions": [
-    {
-      "title": "string",
-      "style": "string",
-      "description": "string",
-      "highlights": ["string", "string", "string"],
-      "estimatedCostAdder": number,
-      "imagePrompt": "string"
-    }
-  ]
-}
+};
 
-Rules:
+const USAGE_GUIDE = `Guidance:
 - regionalCodes: 4–6 codes specific to this trade and region. Derive state/region from the address.
 - materials: 8–14 primary materials with realistic current market quantities and unit costs.
 - costEstimate: realistic low/high range for this region and scope, broken down by trade/phase.
 - designOptions: exactly 3 distinct styles suited to this trade and project. For imagePrompt, write a highly detailed photorealistic architectural rendering prompt (at least 40 words) for DALL-E.`;
 
 export async function runAgentAnalysis(systemPrompt, { name, address, description, budget, photos = [] }) {
-  const content = [];
+  const userContent = [
+    ...photosToContent(photos),
+    {
+      type: "text",
+      text: `Project: ${name}\nAddress: ${address}\nDescription: ${description}\nBudget: $${budget}\n\n${USAGE_GUIDE}`,
+    },
+  ];
 
-  for (const photo of photos) {
-    if (!photo.base64) continue;
-    const base64Data = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: photo.mimeType || "image/jpeg", data: base64Data },
-    });
-    if (photo.caption) content.push({ type: "text", text: `Photo: ${photo.caption}` });
-  }
-
-  content.push({
-    type: "text",
-    text: `Project: ${name}\nAddress: ${address}\nDescription: ${description}\nBudget: $${budget}\n\n${OUTPUT_SCHEMA}`,
-  });
-
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+  return await extractStructured({
     system: systemPrompt,
-    messages: [{ role: "user", content }],
+    userContent,
+    schema: ANALYSIS_SCHEMA,
+    toolName: "submit_project_analysis",
+    toolDescription: "Submit the regional codes, materials, cost estimate, and design options for this construction project.",
   });
-
-  const text = message.content[0].text;
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Agent did not return valid JSON");
-  return JSON.parse(jsonMatch[0]);
 }
 
 export async function generateDesignImages(analysis) {
-  if (!process.env.OPENAI_API_KEY || !analysis.designOptions?.length) return analysis;
+  if (!process.env.OPENAI_API_KEY || !analysis?.designOptions?.length) return analysis;
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const results = await Promise.allSettled(
     analysis.designOptions.map(opt =>

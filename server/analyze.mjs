@@ -1,81 +1,99 @@
-import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { extractStructured, photosToContent } from "./lib/anthropic.mjs";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const SYSTEM_PROMPT = `You are a licensed general contractor and building code expert. Given a construction project description, location, and any supplied site photos, produce a realistic project analysis including applicable building codes, a primary materials list, a banded cost estimate, and three distinct design directions.
+
+Derive the jurisdiction from the address. Use IRC, IBC, NEC, IPC, IMC, and locally amended codes where relevant. Use current market prices and typical regional labor rates. Keep design options architecturally coherent with the project type.`;
+
+const SCHEMA = {
+  type: "object",
+  required: ["regionalCodes", "materials", "costEstimate", "designOptions"],
+  properties: {
+    regionalCodes: {
+      type: "array", minItems: 4, maxItems: 6,
+      items: {
+        type: "object",
+        required: ["code", "title", "description", "category"],
+        properties: {
+          code: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          category: { type: "string" },
+        },
+      },
+    },
+    materials: {
+      type: "array", minItems: 8,
+      items: {
+        type: "object",
+        required: ["item", "quantity", "unit", "estimatedCost", "category"],
+        properties: {
+          item: { type: "string" },
+          quantity: { type: "string" },
+          unit: { type: "string" },
+          estimatedCost: { type: "number" },
+          category: { type: "string" },
+        },
+      },
+    },
+    costEstimate: {
+      type: "object",
+      required: ["breakdown", "totalLow", "totalHigh", "notes"],
+      properties: {
+        breakdown: {
+          type: "array", minItems: 4,
+          items: {
+            type: "object",
+            required: ["category", "low", "high"],
+            properties: {
+              category: { type: "string" },
+              low: { type: "number" },
+              high: { type: "number" },
+            },
+          },
+        },
+        totalLow: { type: "number" },
+        totalHigh: { type: "number" },
+        notes: { type: "string" },
+      },
+    },
+    designOptions: {
+      type: "array", minItems: 3, maxItems: 3,
+      items: {
+        type: "object",
+        required: ["title", "style", "description", "highlights", "estimatedCostAdder", "imagePrompt"],
+        properties: {
+          title: { type: "string" },
+          style: { type: "string" },
+          description: { type: "string" },
+          highlights: { type: "array", minItems: 3, items: { type: "string" } },
+          estimatedCostAdder: { type: "number" },
+          imagePrompt: { type: "string" },
+        },
+      },
+    },
+  },
+};
 
 export async function analyzeProject(req, res) {
   const { name, address, description, budget, photos = [] } = req.body;
 
   try {
-    // Build message content — prepend any uploaded photos for vision analysis
-    const content = [];
+    const userContent = [
+      ...photosToContent(photos),
+      {
+        type: "text",
+        text: `Project Name: ${name}\nAddress: ${address}\nDescription: ${description}\nBudget: $${budget}\n\nReturn 4–6 regional codes, 8–14 materials with realistic quantities and costs, a banded cost estimate broken down by trade/phase, and exactly 3 distinct design options. For each design option's imagePrompt, write at least 40 words of photorealistic architectural rendering detail suitable for DALL-E.`,
+      },
+    ];
 
-    for (const photo of photos) {
-      if (!photo.base64) continue;
-      const base64Data = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
-      content.push({
-        type: "image",
-        source: { type: "base64", media_type: photo.mimeType || "image/jpeg", data: base64Data },
-      });
-      if (photo.caption) {
-        content.push({ type: "text", text: `Photo caption: ${photo.caption}` });
-      }
-    }
-
-    content.push({
-      type: "text",
-      text: `You are a licensed general contractor and building code expert. Analyze the construction project below and return ONLY a valid JSON object — no markdown, no commentary.
-
-Project Name: ${name}
-Address: ${address}
-Description: ${description}
-Budget: $${budget}
-
-Return this exact JSON structure:
-{
-  "regionalCodes": [
-    { "code": "string", "title": "string", "description": "string", "category": "string" }
-  ],
-  "materials": [
-    { "item": "string", "quantity": "string", "unit": "string", "estimatedCost": number, "category": "string" }
-  ],
-  "costEstimate": {
-    "breakdown": [
-      { "category": "string", "low": number, "high": number }
-    ],
-    "totalLow": number,
-    "totalHigh": number,
-    "notes": "string"
-  },
-  "designOptions": [
-    {
-      "title": "string",
-      "style": "string",
-      "description": "string",
-      "highlights": ["string", "string", "string"],
-      "estimatedCostAdder": number,
-      "imagePrompt": "string"
-    }
-  ]
-}
-
-Rules:
-- regionalCodes: 4–6 codes relevant to the address region (IRC, IBC, NEC, local amendments). Derive state/region from the address.
-- materials: 8–14 primary materials with realistic current market quantities and unit costs.
-- costEstimate: realistic low/high range for this region and project scope, broken down by trade/category.
-- designOptions: exactly 3 distinct styles suited to this project type (e.g. Modern, Traditional, Industrial). For imagePrompt, write a highly detailed photorealistic interior/exterior architectural rendering prompt (at least 40 words) that DALL-E can use to generate the design visual.`,
+    const analysis = await extractStructured({
+      system: SYSTEM_PROMPT,
+      userContent,
+      schema: SCHEMA,
+      toolName: "submit_project_analysis",
+      toolDescription: "Submit the regional codes, materials, cost estimate, and design options for this construction project.",
     });
-
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      messages: [{ role: "user", content }],
-    });
-
-    const text = message.content[0].text;
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Model did not return valid JSON");
-    const analysis = JSON.parse(jsonMatch[0]);
 
     // Generate design visuals if OpenAI key is present
     if (process.env.OPENAI_API_KEY && analysis.designOptions?.length) {

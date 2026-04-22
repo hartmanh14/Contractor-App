@@ -3,12 +3,15 @@ import { useApp } from "@/store/AppContext";
 import { PHASES } from "@/lib/constants";
 import { fmt } from "@/lib/utils";
 import { btnPrimary, btnSm, input, lbl } from "@/styles/theme";
+import { analyzeProject } from "@/lib/api/analyze";
 
 const STEPS = ["Details", "Photos", "Review", "AI Analysis"];
 
 // ---------------------------------------------------------------------------
-// Mock AI analysis — replace the body of generateMockAnalysis() with a real
-// fetch("/api/analyze", ...) call once you have an Anthropic API key.
+// Trade detection + mock data. The wizard first attempts the real backend
+// (see analyzeProject in src/lib/api/analyze.js); if the server is unreachable
+// or no API key is configured, it falls back to this local mock so the demo
+// still works offline.
 // ---------------------------------------------------------------------------
 
 function detectType(description = "", name = "") {
@@ -906,7 +909,7 @@ const MOCK_DATA = {
 };
 
 async function generateMockAnalysis({ name, description }) {
-  await new Promise(r => setTimeout(r, 2200));
+  await new Promise(r => setTimeout(r, 1200));
   const type = detectType(description, name);
   return MOCK_DATA[type] ?? MOCK_DATA.general;
 }
@@ -946,6 +949,8 @@ export default function NewProjectWizard({ onClose }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [analyzeError, setAnalyzeError] = useState(null);
+  const [analysisSource, setAnalysisSource] = useState(null); // "api" | "mock"
+  const [analysisTrade, setAnalysisTrade] = useState(null);
   const fileRef = useRef();
 
   function setF(key, val) { setForm(f => ({ ...f, [key]: val })); }
@@ -974,9 +979,15 @@ export default function NewProjectWizard({ onClose }) {
     setAnalyzing(true);
     setAnalyzeError(null);
     setAnalysis(null);
+    setAnalysisSource(null);
+    setAnalysisTrade(null);
     try {
-      const result = await generateMockAnalysis(form);
+      const { analysis: result, source, trade } = await analyzeProject(form, {
+        mockFallback: generateMockAnalysis,
+      });
       setAnalysis(result);
+      setAnalysisSource(source);
+      setAnalysisTrade(trade);
     } catch (err) {
       setAnalyzeError(err.message);
     } finally {
@@ -1202,6 +1213,17 @@ export default function NewProjectWizard({ onClose }) {
 
             {analysis && !analyzing && (
               <div>
+                {/* Source banner — lets the user know whether real API ran */}
+                {analysisSource === "mock" ? (
+                  <div style={{ padding: "10px 14px", background: "#f59e0b11", border: "1px solid #f59e0b33", borderRadius: 8, fontSize: 12, color: "#fbbf24", marginBottom: 14 }}>
+                    ⚠️ Preview mode — showing sample data. Add an <code>ANTHROPIC_API_KEY</code> to the backend to generate real analysis from project photos and description.
+                  </div>
+                ) : analysisSource === "api" && (
+                  <div style={{ padding: "10px 14px", background: "#22c55e11", border: "1px solid #22c55e33", borderRadius: 8, fontSize: 12, color: "#86efac", marginBottom: 14 }}>
+                    ✓ Live AI analysis{analysisTrade ? ` · ${analysisTrade} specialist` : ""}
+                  </div>
+                )}
+
                 {/* Regional Codes */}
                 <div style={s.section}>
                   <div style={s.sectionHead}>📋 Regional Code Requirements</div>
