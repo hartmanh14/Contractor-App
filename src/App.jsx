@@ -9,10 +9,11 @@ import Subs from "@/features/subs/Subs";
 import Schedule from "@/features/schedule/Schedule";
 import Budget from "@/features/budget/Budget";
 import Safety from "@/features/safety/Safety";
+import Contracts from "@/features/contracts/Contracts";
 
 const VIEWS = {
   Dashboard, Projects, "Find Subs": FindSubs,
-  Permits, Subs, Schedule, Budget, Safety,
+  Permits, Subs, Schedule, Budget, Safety, Contracts,
 };
 
 export default function App() {
